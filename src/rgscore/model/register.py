@@ -58,8 +58,11 @@ class FieldDef:
         return (("" if self.name is None else f"{self.name}@") +
                 f"[{self.end_offset()}:{self.offset}]{self.signed}{self.width}.{self.fractional}#{rw}")
 
+    def read_raw(self, data: BitArray) -> BitArray:
+        return data[(data.len - self.end_offset() - 1):(data.len - self.offset)]
+
     def read(self, data: BitArray) -> int:
-        raw_field = data[(data.len - self.end_offset() - 1):(data.len - self.offset)]
+        raw_field = self.read_raw(data)
         return (raw_field.int if self.signed == "S" else raw_field.uint) / pow(2, self.fractional)
 
     def write(self, data: BitArray, value: float) -> None:
@@ -165,6 +168,13 @@ class Register:
             raise ValueError(f"There is no field \"{field}\" in this register.")
         else:
             return field_def.read(self.data)
+
+    def get_field_value_raw(self, field: str) -> BitArray:
+        field_def = self._fields_by_name.get(field)
+        if field_def is None:
+            raise ValueError(f"There is no field \"{field}\" in this register.")
+        else:
+            return field_def.read_raw(self.data)
 
     def get_field_values(self) -> dict[str, float]:
         return {m.name: self.get_field_value(m.name) for m in self._model}

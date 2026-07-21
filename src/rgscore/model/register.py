@@ -5,12 +5,16 @@ from functools import cache, reduce
 from typing import Optional
 
 from bitstring import BitArray
+from i2c_api import I2CMaster
 
 
 class RLink(ABC):
     @abstractmethod
-    def read(self, addr: int) -> Optional[BitArray]:
-        """ Reads raw register value from address `addr`. If no register exist at this address, then returns None. """
+    def read(self, addr: int, width: int) -> Optional[BitArray]:
+        """
+        Reads raw register value (of `width` bits) from address `addr`.
+        If no register exist at this address, then returns None.
+        """
         pass
 
     @abstractmethod
@@ -19,6 +23,25 @@ class RLink(ABC):
         Writes register value `value` to address `addr`. If register does exist at this address the do write and
         return True, otherwise return False.
         """
+
+
+class RLinkI2C(RLink):
+    def __init__(self, i2c: I2CMaster, device_address: int):
+        self.i2c = i2c
+        self.device_address = device_address
+
+    def read(self, addr: int, width: int) -> Optional[BitArray]:
+        bytes_to_read = int(width / 8)
+        if (width % 8) > 0:
+            bytes_to_read += 1
+        data = self.i2c.read_register(address=self.device_address, register=addr, num_bytes=bytes_to_read)
+        if data is None:
+            return None
+        else:
+            return BitArray(data[0:width])  # TODO: Check. This might be incorrect
+
+    def write(self, addr: int, value: BitArray) -> bool:
+        self.i2c.write_register(address=self.device_address, register=addr, data=value)
 
 
 @dataclass(frozen=True)
@@ -205,7 +228,7 @@ class Register:
 
     def read(self) -> None:
         if self._link is not None:
-            raw_data = self._link.read(self.linked_address)
+            raw_data = self._link.read(self.linked_address, self.width)
             if raw_data is None:
                 raise RuntimeError(f"There is no register at the address {self.linked_address}.")
             self.data = raw_data

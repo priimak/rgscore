@@ -148,6 +148,15 @@ def test_field_def():
     assert fd.fractional == 3
     assert fd.rw == True
 
+    # field with width of 1 bit can be written as [offset] or [offset:offset]
+    fd = FieldDef.value_of("a@[5:5]U1.0")
+    assert fd.offset == 5
+    assert fd.width == 1
+
+    fd = FieldDef.value_of("a@[5]U1.0")
+    assert fd.offset == 5
+    assert fd.width == 1
+
     # field range [10:3] is of width 8 bits while numeric type is declared as unsigned 3 bits wide int. This is
     # iternally inconsistent and should give rise to ValueError
     with pytest.raises(ValueError):

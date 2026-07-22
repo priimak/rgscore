@@ -96,8 +96,11 @@ class FieldDef:
     def value_of(field_definition: str) -> "FieldDef":
         m = Register.field_def_re.match(field_definition)
         if m:
-            start_offset = int(m.group("start"))
             end_offset = int(m.group("end"))
+
+            start_group = m.group("start")
+            start_offset = int(start_group) if start_group else end_offset
+
             implied_width = end_offset - start_offset + 1
             width = int(m.group("w"))
             if implied_width != width:
@@ -112,7 +115,7 @@ class FieldDef:
 
 class Register:
     field_def_re = re.compile(
-        r"^(?P<name>[a-zA-Z_]+[0-9]*)@\[(?P<end>\d+):(?P<start>\d+)\](?P<s>U|S)(?P<w>\d+)\.(?P<f>\d+)(#(?P<rw>rw|ro))?$"
+        r"^(?P<name>[a-zA-Z_]+[0-9]*)@\[(?P<end>\d+)(:(?P<start>\d+))?\](?P<s>U|S)(?P<w>\d+)\.(?P<f>\d+)(#(?P<rw>rw|ro))?$"
     )
 
     def __init__(self, bit_len: int, model: Optional[list[FieldDef]] = None, address: Optional[int] = None,

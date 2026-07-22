@@ -20,7 +20,7 @@ def link(bmp581_address: int) -> RLink:
 
 rs = RegSet(RLinkI2C(I2CMasterI2CDriver(I2CDriver()), 0x47))
 rs.add(Register(
-    bit_len=8, address=0x37, name="ODR",
+    bit_len=8, address=0x37, name="ODR_CONFIG",
     model=[
         FieldDef.value_of("deep_dis@[7:7]U1.0"),
         FieldDef.value_of("odr@[6:2]U5.0"),
@@ -36,7 +36,7 @@ class TestBMP581:
         assert asic_id_regval.bin == "01010000"
 
     def test_odr_register(self, link: RLink):
-        odr_register = rs["ODR"]
+        odr_register = rs["ODR_CONFIG"]
         odr_register.read()
 
         # this register should come up with all values reset to default values which are as follows:

@@ -15,7 +15,6 @@ class RLink(ABC):
         Reads raw register value (of `width` bits) from address `addr`.
         If no register exist at this address, then returns None.
         """
-        pass
 
     @abstractmethod
     def write(self, addr: int, value: BitArray) -> bool:
@@ -108,12 +107,12 @@ class FieldDef:
             return FieldDef(name=m.group("name"), offset=start_offset, signed=m.group("s"),
                             width=width, fractional=int(m.group("f")), rw=(rw == "rw"))
         else:
-            raise ValueError("Invalid register field definition.")
+            raise ValueError(f"Invalid register field definition [{field_definition}]")
 
 
 class Register:
     field_def_re = re.compile(
-        r"^(?P<name>[a-zA-Z]+[0-9]*)@\[(?P<end>\d+):(?P<start>\d+)\](?P<s>U|S)(?P<w>\d+)\.(?P<f>\d+)(#(?P<rw>rw|ro))?$"
+        r"^(?P<name>[a-zA-Z_]+[0-9]*)@\[(?P<end>\d+):(?P<start>\d+)\](?P<s>U|S)(?P<w>\d+)\.(?P<f>\d+)(#(?P<rw>rw|ro))?$"
     )
 
     def __init__(self, bit_len: int, model: Optional[list[FieldDef]] = None, address: Optional[int] = None,
@@ -237,4 +236,4 @@ class Register:
         if self._link is not None:
             self._link.write(self.linked_address, self.data)
             if read_back:
-                self.read(self.linked_address)
+                self.read()

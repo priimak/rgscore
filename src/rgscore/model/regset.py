@@ -3,12 +3,19 @@ from typing import Optional
 from rgscore.model.register import Register, RLink
 
 
-class RegSet(object):
+class RegSet(dict[str, Register]):
     def __init__(self, store: Optional[RLink] = None):
         self.registers: list[Register] = []
         self._reg_names: set[str] = set()
         self._reg_addresses: set[int] = set()
+        self._reg_by_names: dict[str, Register] = {}
         self._store = store
+
+    def __getitem__(self, __key):
+        return self._reg_by_names[__key]
+
+    def __setitem__(self, __key, __value):
+        pass
 
     def add(self, r: Register):
         if r.address is None:
@@ -30,6 +37,7 @@ class RegSet(object):
         self.registers.append(r)
         self._reg_names.add(r.name)
         self._reg_addresses.add(r.address)
+        self._reg_by_names[r.name] = r
 
     def read_all(self) -> None:
         for r in self.registers:

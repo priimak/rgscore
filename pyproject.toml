@@ -1,6 +1,6 @@
 [project]
 name = "rgscore"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -8,11 +8,6 @@ dependencies = [
     "bitstring>=4.4.0",
     "i2c-api @ git+https://github.com/priimak/i2c_api.git@v0.2.2"
 ]
-
-#[project.dev]
-#depenencies = [
-#    "pytest"
-#]
 
 [build-system]
 requires = ["setuptools", "wheel", "setuptools-git-versioning"]
@@ -23,3 +18,9 @@ enabled = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "i2capi-i2cdriver @ git+https://github.com/priimak/i2capi_i2cdriver.git@v0.1.1"
+]

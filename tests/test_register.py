@@ -169,7 +169,7 @@ def test_link():
         def __init__(self):
             self.store = {0x9: BitArray("uint:16=7"), 0xA: BitArray("uint:8=3")}
 
-        def read(self, addr: int) -> Optional[BitArray]:
+        def read(self, addr: int, width: int) -> Optional[BitArray]:
             raw_register = self.store.get(addr)
             return None if raw_register is None else raw_register.copy()
 

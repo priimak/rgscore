@@ -83,9 +83,12 @@ class FieldDef:
     def read_raw(self, data: BitArray) -> BitArray:
         return data[(data.len - self.end_offset() - 1):(data.len - self.offset)]
 
-    def read(self, data: BitArray) -> int:
+    def read(self, data: BitArray) -> float | int:
         raw_field = self.read_raw(data)
-        return (raw_field.int if self.signed == "S" else raw_field.uint) / pow(2, self.fractional)
+        if self.fractional == 0:
+            return raw_field.int if self.signed == "S" else raw_field.uint
+        else:
+            return (raw_field.int if self.signed == "S" else raw_field.uint) / pow(2, self.fractional)
 
     def write(self, data: BitArray, value: float) -> None:
         new_val = int(value * pow(2, self.fractional))
@@ -119,7 +122,7 @@ class Register:
     )
 
     def __init__(self, bit_len: int, model: Optional[list[FieldDef]] = None, address: Optional[int] = None,
-                 name: Optional[str] = None):
+                 name: Optional[str] = None, link: Optional[RLink] = None):
         """
         Register in an object that encapsulates array of bits and field definitions and provides read and write
         access to these fields. Fields are defined in the model
@@ -128,6 +131,7 @@ class Register:
         :param model: model of register fields
         :param address: register address (optional)
         :param name: register name (optional)
+        :param link: link to the external storage (optional)
         """
         if name is not None and not re.match("^[a-zA-Z]+[a-zA-Z0-9_]+$", name):
             raise ValueError("Invalid register name.")
@@ -135,6 +139,7 @@ class Register:
         if bit_len <= 0:
             raise ValueError("Register width must be greater than zero")
         self.data = BitArray(bit_len)
+        self.__originial_data = BitArray(bit_len)
         self.width = bit_len
 
         self._model = [FieldDef.value_of(f"val@[{bit_len - 1}:0]U{bit_len}.0")] if model is None else model
@@ -153,10 +158,19 @@ class Register:
         if len(set(fields_idxs)) != len(fields_idxs):
             raise ValueError("Overlapping fields in register definition.")
 
+        if address is None and link is not None:
+            raise ValueError("Register address must be defined to link it to the external store.")
         self.address = address
         self.name = name
-        self._link: Optional[RLink] = None
-        self.linked_address: Optional[int] = None
+        self._link: Optional[RLink] = link
+        self.linked_address: Optional[int] = None if link is None else address
+
+    def is_changed(self) -> bool:
+        """
+        Returns True or False indicating of register data has changed since it was loaded. This method is only usefull
+        when external storage is linked to the register and read() and write() methods are called.
+        """
+        return self.__originial_data != self.data
 
     def get_def(self) -> str:
         """ Returns human-readable register definition. """
@@ -174,7 +188,8 @@ class Register:
 
     def set_field_value(self, field: str, value: float) -> None:
         """
-        Sets value to a field or raises exception if unable to do so.
+        Sets value to a field or raises exception if unable to do so. If data in the register model in memory actually
+        changed as a result of calling this method, then calling `Register::is_changed()` starts returning True.
         """
         field_def = self._fields_by_name.get(field)
         if field_def is None:
@@ -187,7 +202,7 @@ class Register:
         else:
             raise ValueError(f"Value {value} is out of range [{field_def.range()}] for field \"{field}\"")
 
-    def get_field_value(self, field: str) -> float:
+    def get_field_value(self, field: str) -> float | int:
         field_def = self._fields_by_name.get(field)
         if field_def is None:
             raise ValueError(f"There is no field \"{field}\" in this register.")
@@ -210,7 +225,7 @@ class Register:
     def get_field_names(self) -> list[str]:
         return [m.name for m in self._model]
 
-    def link(self, link: RLink, address: Optional[int] = None) -> None:
+    def link(self, link: RLink, register_address: Optional[int] = None) -> None:
         """
         Links register to external store. If optional address is provided, then it will be used to access external store
         even if register has address in its definition. If optional address is not provided, then address defined in the
@@ -218,9 +233,9 @@ class Register:
         will be raised.
 
         :param link: link to external store
-        :param address: address of register in external store
+        :param register_address: address of register in external store
         """
-        self.linked_address = self.address if address is None else address
+        self.linked_address = self.address if register_address is None else register_address
         if self.linked_address is None:
             raise ValueError(
                 "To link register to external store address must be either set in the register "
@@ -229,14 +244,38 @@ class Register:
         self._link = link
 
     def read(self) -> None:
+        """
+        Reads register data from associated link (external store). If no link is configured, then this is a no-op.
+        If external store store (link) is configure and read operation fails for any reason than RuntimeError is raised.
+        Once data is read from the external store, calling `Register::is_changed()` starts returning False until
+        data is modified by calling `Register::set_field_value(...)`.
+        """
         if self._link is not None:
             raw_data = self._link.read(self.linked_address, self.width)
             if raw_data is None:
                 raise RuntimeError(f"There is no register at the address {self.linked_address}.")
             self.data = raw_data
+            self.__originial_data = raw_data.copy()
 
-    def write(self, read_back: bool = False) -> None:
-        if self._link is not None:
-            self._link.write(self.linked_address, self.data)
+    def write(self, read_back: bool = False, if_changed_only: bool = False) -> bool:
+        """
+        Writes register data to external store configured when `Register::link(...)` method is called.
+        Once data is written to the external store, calling `Register::is_changed()` starts returning False until
+        data is modified by calling `Register::set_field_value(...)`.
+
+        :param read_back: If True, then immediately after write operation read it back. If False, then do just write op.
+        :param if_changed_only: If True, then check if register in memory model changed and if so then do write,
+                otherwise do not write (return False). If False (default), then always write.
+        :return: True or False if write operation was successful or not.
+        """
+        if self._link is None:
+            return False
+        elif if_changed_only and self.__originial_data == self.data:
+            return False
+        else:
+            write_success = self._link.write(self.linked_address, self.data)
             if read_back:
                 self.read()
+            if write_success:
+                self.__originial_data = self.data.copy()
+            return write_success

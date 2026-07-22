@@ -5,6 +5,22 @@ from bitstring import BitArray
 from rgscore.model.register import Register, FieldDef, RLink
 
 
+class MemLink(RLink):
+    def __init__(self):
+        self.store = {0x9: BitArray("uint:16=7"), 0xA: BitArray("uint:8=3")}
+
+    def read(self, addr: int, width: int) -> Optional[BitArray]:
+        raw_register = self.store.get(addr)
+        return None if raw_register is None else raw_register.copy()
+
+    def write(self, addr: int, value: BitArray) -> bool:
+        if addr in self.store:
+            self.store[addr] = value.copy()
+            return True
+        else:
+            return False
+
+
 def test_bare_register_valid():
     # create 7 bits wide register with no explicit fields defined, no name and no address.
     r = Register(7)
@@ -174,34 +190,42 @@ def test_field_def():
 
 
 def test_link():
-    class MemLink(RLink):
-        def __init__(self):
-            self.store = {0x9: BitArray("uint:16=7"), 0xA: BitArray("uint:8=3")}
-
-        def read(self, addr: int, width: int) -> Optional[BitArray]:
-            raw_register = self.store.get(addr)
-            return None if raw_register is None else raw_register.copy()
-
-        def write(self, addr: int, value: BitArray) -> bool:
-            if addr in self.store:
-                self.store[addr] = value.copy()
-                return True
-            else:
-                return False
-
     store = MemLink()
     r = Register(
         bit_len=8, address=0xA, name="AReg",
         model=[FieldDef.value_of("a@[3:0]U4.1"), FieldDef.value_of("b@[6:4]S3.0")]
     )
+    # register is not linked yet, hence, r.linked_address must be None and write() should fail returning False
+    assert r.linked_address is None
+    assert r.write() == False
+
+    assert r.is_changed() == False
     r.link(store)
     assert r.get_field_value("a") == 0.0
     r.read()
+    assert r.is_changed() == False
     assert r.get_field_value("a") == 1.5
+
+    # by default writing back just loaded value should happen
+    assert r.write() == True
+
+    # but writing back with if_changed_only set to True should not happen since we have not changed anything
+    # in the register yet.
+    assert r.write(if_changed_only=True) == False
+
+    r.set_field_value("a", 0.5)
+    assert r.is_changed() == True
+    # calling read() should reset register value
+    r.read()
+    assert r.is_changed() == False
+    assert r.get_field_value("a") == 1.5
+
+    # now change register and write it to the store
     r.set_field_value("a", 0.5)
     assert r.get_field_value("a") == 0.5
     assert store.store[0xA] == BitArray("uint:8=3")
-    r.write()
+    assert r.write() == True
+    assert r.is_changed() == False
     assert store.store[0xA] == BitArray("uint:8=1")
 
     # if register does not have an address and r.link(...) is missing address then error should be raised
@@ -214,7 +238,18 @@ def test_link():
     r.read()
     assert r.get_field_value("val") == 1.0
 
-    # if address is invalid then error "There is no register at the address ..." should be raised
+    # if register address is invalid then error "There is no register at the address ..." should be raised
     r.link(store, 0xB)
     with pytest.raises(RuntimeError):
         r.read()
+
+
+def test_link_at_creation():
+    store = MemLink()
+
+    # linking at register construction time requires reg. address or ValueError should be raised
+    with pytest.raises(ValueError):
+        Register(bit_len=8, name="AReg", link=store)
+
+    r = Register(bit_len=8, name="AReg", link=store, address=0xA)
+    assert r.linked_address == 0xA

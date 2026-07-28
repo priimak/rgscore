@@ -1,7 +1,9 @@
+import json
 from typing import Optional
 
 import pytest
 from bitstring import BitArray
+
 from rgscore.model.register import Register, FieldDef, RLink
 
 
@@ -253,3 +255,24 @@ def test_link_at_creation():
 
     r = Register(bit_len=8, name="AReg", link=store, address=0xA)
     assert r.linked_address == 0xA
+
+
+def test_json_serialization():
+    r1 = Register(
+        bit_len=8, name="Foo", address=0x01,
+        model=[FieldDef.value_of("a@[3:0]U4.1#ro"), FieldDef.value_of("b@[6:4]S3.0")]
+    )
+    r_json = r1.to_json_def()
+    data = json.loads(r_json)
+    assert data["name"] == "Foo"
+    assert data["address"] == "0x1"
+    assert data["width"] == 8
+    assert len(data["fields"]) == 2
+
+    # now create new instance of Register from the json string
+    r2 = Register.from_json_def(r_json)
+    assert r2.name == "Foo"
+    assert r2.address == 1
+    assert r2.width == 8
+    assert r2.get_field_names() == ["a", "b"]
+    assert r_json == r2.to_json_def()

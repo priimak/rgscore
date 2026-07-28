@@ -3,7 +3,8 @@ import time
 import pytest
 from i2capi_i2cdriver.i2cdriver_api import I2CMasterI2CDriver
 from i2cdriver import I2CDriver
-from rgscore import RLink, RLinkI2C, Register, FieldDef, RegSet
+
+from rgscore import RLink, RLinkI2C, Register, FieldDef, RegList
 
 i2c_master = I2CMasterI2CDriver(I2CDriver())
 
@@ -18,7 +19,7 @@ def link(bmp581_address: int) -> RLink:
     return RLinkI2C(i2c_master, bmp581_address)
 
 
-rs = RegSet(RLinkI2C(I2CMasterI2CDriver(I2CDriver()), 0x47))
+rs = RegList(RLinkI2C(I2CMasterI2CDriver(I2CDriver()), 0x47))
 rs.add(Register(
     bit_len=8, address=0x37, name="ODR_CONFIG",
     model=[
@@ -36,7 +37,7 @@ class TestBMP581:
         assert asic_id_regval.bin == "01010000"
 
     def test_odr_register(self, link: RLink):
-        odr_register = rs["ODR_CONFIG"]
+        odr_register = rs.get_register_by_name("ODR_CONFIG")
         odr_register.read()
 
         # this register should come up with all values reset to default values which are as follows:
@@ -57,8 +58,8 @@ class TestBMP581:
         assert odr_register.get_field_value("odr") == 0x1F  # 0.125Hz frequency for measurements
 
         # now issue reset and read back odr_register and confirm that odr value is back to default value
-        rs["CMD"].set_field_value("cmd", 0xB6)
-        rs["CMD"].write()
+        rs.get_register_by_name("CMD").set_field_value("cmd", 0xB6)
+        rs.get_register_by_name("CMD").write()
         # according to the spec device should be unresponsive for 2ms. So to proceed we will wait 5 millis.
         time.sleep(0.005)
         odr_register.read()

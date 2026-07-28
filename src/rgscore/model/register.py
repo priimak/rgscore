@@ -1,3 +1,5 @@
+import dataclasses
+import json
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -138,7 +140,7 @@ class Register:
 
         if bit_len <= 0:
             raise ValueError("Register width must be greater than zero")
-        self.data = BitArray(bit_len)
+        self.data: BitArray = BitArray(bit_len)
         self.__originial_data = BitArray(bit_len)
         self.width = bit_len
 
@@ -185,6 +187,33 @@ class Register:
         return f"{retval}(" + ", ".join(
             [f"{field_def.name}={field_def.format(field_def.read(self.data))}" for field_def in self._model]
         ) + ")"
+
+    def to_dict_def(self) -> dict:
+        """ Exports register definition as dict. """
+        return {
+            "name": self.name,
+            "address": None if self.address is None else f"0x{self.address:X}",
+            "width": self.width,
+            "fields": [dataclasses.asdict(field_def) for field_def in self._model],
+        }
+
+    def to_json_def(self, indent: int | None = None) -> str:
+        """ Exports register definition as json text. """
+        return json.dumps(self.to_dict_def(), indent=indent)
+
+    @staticmethod
+    def from_dict_def(data: dict) -> "Register":
+        return Register(
+            bit_len=data["width"],
+            name=data["name"],
+            address=None if data["address"] is None else int(data["address"], 16),
+            model=[FieldDef(**f) for f in data["fields"]]
+        )
+
+    @staticmethod
+    def from_json_def(json_str: str) -> "Register":
+        """ Imports register definition from json text and returns instance of Register. """
+        return Register.from_dict_def(json.loads(json_str))
 
     def set_field_value(self, field: str, value: float) -> None:
         """

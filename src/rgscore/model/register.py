@@ -4,7 +4,7 @@ import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import cache, reduce
-from typing import Optional
+from typing import Self, final
 
 from bitstring import BitArray
 from i2c_api import I2CMaster
@@ -12,7 +12,7 @@ from i2c_api import I2CMaster
 
 class RLink(ABC):
     @abstractmethod
-    def read(self, addr: int, width: int) -> Optional[BitArray]:
+    def read(self, addr: int, width: int) -> BitArray | None:
         """
         Reads raw register value (of `width` bits) from address `addr`.
         If no register exist at this address, then returns None.
@@ -26,33 +26,42 @@ class RLink(ABC):
         """
 
 
+@final
 class RLinkI2C(RLink):
     def __init__(self, i2c: I2CMaster, device_address: int):
         self.i2c = i2c
         self.device_address = device_address
 
-    def read(self, addr: int, width: int) -> Optional[BitArray]:
+    def read(self, addr: int, width: int) -> BitArray | None:
         bytes_to_read = int(width / 8)
         if (width % 8) > 0:
             bytes_to_read += 1
-        data = self.i2c.read_register(address=self.device_address, register=addr, num_bytes=bytes_to_read)
+        data = self.i2c.read_register(
+            address=self.device_address, register=addr, num_bytes=bytes_to_read
+        )
+
         if data is None:
             return None
         else:
             return BitArray(data[0:width])  # TODO: Check. This might be incorrect
 
     def write(self, addr: int, value: BitArray) -> bool:
-        self.i2c.write_register(address=self.device_address, register=addr, data=value)
+        return self.i2c.write_register(
+            address=self.device_address, register=addr, data=value
+        )
 
 
 @dataclass(frozen=True)
 class FieldDef:
-    name: Optional[str]
+    name: str
     offset: int
     signed: str
     width: int
     fractional: int
     rw: bool
+
+    def copy(self) -> Self:
+        return dataclasses.replace(self)
 
     @cache
     def range(self) -> tuple[float, float]:
@@ -61,7 +70,7 @@ class FieldDef:
         else:
             return (
                 -(pow(2, self.width - 1) / pow(2, self.fractional)),
-                (pow(2, self.width - 1) - 1) / pow(2, self.fractional)
+                (pow(2, self.width - 1) - 1) / pow(2, self.fractional),
             )
 
     @cache
@@ -79,22 +88,23 @@ class FieldDef:
     @cache
     def __repr__(self):
         rw = "rw" if self.rw else "ro"
-        return (("" if self.name is None else f"{self.name}@") +
-                f"[{self.end_offset()}:{self.offset}]{self.signed}{self.width}.{self.fractional}#{rw}")
+        return f"{self.name}@[{self.end_offset()}:{self.offset}]{self.signed}{self.width}.{self.fractional}#{rw}"
 
     def read_raw(self, data: BitArray) -> BitArray:
-        return data[(data.len - self.end_offset() - 1):(data.len - self.offset)]
+        return data[(data.len - self.end_offset() - 1) : (data.len - self.offset)]
 
     def read(self, data: BitArray) -> float | int:
         raw_field = self.read_raw(data)
         if self.fractional == 0:
             return raw_field.int if self.signed == "S" else raw_field.uint
         else:
-            return (raw_field.int if self.signed == "S" else raw_field.uint) / pow(2, self.fractional)
+            return (raw_field.int if self.signed == "S" else raw_field.uint) / pow(
+                2, self.fractional
+            )
 
     def write(self, data: BitArray, value: float) -> None:
         new_val = int(value * pow(2, self.fractional))
-        tspec = (f"int:" if self.signed == "S" else f"uint:") + f"{self.width}={new_val}"
+        tspec = ("int:" if self.signed == "S" else "uint:") + f"{self.width}={new_val}"
         data.overwrite(BitArray(tspec), data.len - self.end_offset() - 1)
 
     @staticmethod
@@ -112,8 +122,14 @@ class FieldDef:
                 raise ValueError(f"Inconsistent field width {implied_width} != {width}")
             rw = m.group("rw")
             rw = rw if rw else "rw"
-            return FieldDef(name=m.group("name"), offset=start_offset, signed=m.group("s"),
-                            width=width, fractional=int(m.group("f")), rw=(rw == "rw"))
+            return FieldDef(
+                name=m.group("name"),
+                offset=start_offset,
+                signed=m.group("s"),
+                width=width,
+                fractional=int(m.group("f")),
+                rw=(rw == "rw"),
+            )
         else:
             raise ValueError(f"Invalid register field definition [{field_definition}]")
 
@@ -123,8 +139,14 @@ class Register:
         r"^(?P<name>[a-zA-Z_]+[0-9]*)@\[(?P<end>\d+)(:(?P<start>\d+))?\](?P<s>U|S)(?P<w>\d+)\.(?P<f>\d+)(#(?P<rw>rw|ro))?$"
     )
 
-    def __init__(self, bit_len: int, model: Optional[list[FieldDef]] = None, address: Optional[int] = None,
-                 name: Optional[str] = None, link: Optional[RLink] = None):
+    def __init__(
+        self,
+        bit_len: int,
+        model: list[FieldDef] | None = None,
+        address: int | None = None,
+        name: str | None = None,
+        link: RLink | None = None,
+    ):
         """
         Register in an object that encapsulates array of bits and field definitions and provides read and write
         access to these fields. Fields are defined in the model
@@ -141,55 +163,112 @@ class Register:
         if bit_len <= 0:
             raise ValueError("Register width must be greater than zero")
         self.data: BitArray = BitArray(bit_len)
-        self.__originial_data = BitArray(bit_len)
-        self.width = bit_len
+        self._originial_data = BitArray(bit_len)
+        self.__width = bit_len
 
-        self._model = [FieldDef.value_of(f"val@[{bit_len - 1}:0]U{bit_len}.0")] if model is None else model
+        self._model = (
+            [FieldDef.value_of(f"val@[{bit_len - 1}:0]U{bit_len}.0")]
+            if model is None
+            else [m.copy() for m in model]
+        )
+        self._model.sort(key=lambda fd: -fd.offset)
+
         if self._model == []:
             raise ValueError(
-                "Register model must not be empty list. Leaving it None will create implicit field though."
+                "Register model must not be empty list. Leaving it None will create an implicit field though."
             )
         self._fields_by_name: dict[str, FieldDef] = {fd.name: fd for fd in self._model}
         if len(self._fields_by_name) != len(self._model):
             raise ValueError("Duplicate field names in the model")
-        for m in self._model:
-            if m.end_offset() >= self.width or m.offset < 0:
-                raise ValueError(f"Field \"{m.name}\" extends outside of register width.")
+        self.__validate_model_wrt_width(self._model, self.width)
+        self.__validate_fields_overlapp(self._model)
 
-        fields_idxs = reduce(lambda x, y: x + y, [m.idxs() for m in self._model], [])
+        if address is None and link is not None:
+            raise ValueError(
+                "Register address must be defined to link it to the external store."
+            )
+
+        self.address = address
+        self.name = name
+        self._link: RLink | None = link
+        self.linked_address: int | None = None if link is None else address
+
+    def __validate_model_wrt_width(self, model: list[FieldDef], width: int):
+        for m in model:
+            if m.end_offset() >= width or m.offset < 0:
+                raise ValueError(f'Field "{m.name}" extends outside of register width.')
+
+    def __validate_fields_overlapp(self, model: list[FieldDef]):
+        fields_idxs = reduce(lambda x, y: x + y, [m.idxs() for m in model], [])
         if len(set(fields_idxs)) != len(fields_idxs):
             raise ValueError("Overlapping fields in register definition.")
 
-        if address is None and link is not None:
-            raise ValueError("Register address must be defined to link it to the external store.")
-        self.address = address
-        self.name = name
-        self._link: Optional[RLink] = link
-        self.linked_address: Optional[int] = None if link is None else address
+    @property
+    def width(self) -> int:
+        return self.__width
+
+    @width.setter
+    def width(self, new_width: int):
+        self.__validate_model_wrt_width(self._model, new_width)
+        self.__width = new_width
+        self._originial_data = BitArray(new_width)
+        self.data = BitArray(new_width)
+
+    def replace_model(self, new_model: list[FieldDef]):
+        field_names: set[str] = {fd.name for fd in new_model}
+        if len(field_names) != len(new_model):
+            raise ValueError("Duplicate field names in the model")
+        self.__validate_fields_overlapp(new_model)
+        self.__validate_model_wrt_width(new_model, self.width)
+        self._model.clear()
+        self._model.extend(new_model)
+        self._model.sort(key=lambda fd: -fd.offset)
+
+    def copy(self) -> "Register":
+        register_copy = Register(
+            bit_len=self.width,
+            model=[fd.copy() for fd in self._model],
+            address=self.address,
+            name=self.name,
+            link=self._link,
+        )
+        register_copy.data = self.data.copy()
+        register_copy._originial_data = self._originial_data.copy()
+        return register_copy
 
     def is_changed(self) -> bool:
         """
         Returns True or False indicating of register data has changed since it was loaded. This method is only usefull
         when external storage is linked to the register and read() and write() methods are called.
         """
-        return self.__originial_data != self.data
+        return self._originial_data != self.data
 
     def get_def(self) -> str:
-        """ Returns human-readable register definition. """
-        return "Register" + ("" if self.name is None else f" name:{self.name}") + \
-            ("" if self.address is None else f" addr:0x{self.address:X}") + \
-            f" width:{self.width} fields:{self._model}"
+        """Returns human-readable register definition."""
+        return (
+            "Register"
+            + ("" if self.name is None else f" name:{self.name}")
+            + ("" if self.address is None else f" addr:0x{self.address:X}")
+            + f" width:{self.width} fields:{self._model}"
+        )
 
     def __repr__(self):
         retval = "Register" if self.name is None else self.name
         if self.address is not None:
             retval += f"[0x{self.address:X}]"
-        return f"{retval}(" + ", ".join(
-            [f"{field_def.name}={field_def.format(field_def.read(self.data))}" for field_def in self._model]
-        ) + ")"
+        return (
+            f"{retval}("
+            + ", ".join(
+                [
+                    f"{field_def.name}={field_def.format(field_def.read(self.data))}"
+                    for field_def in self._model
+                ]
+            )
+            + ")"
+        )
 
     def to_dict_def(self) -> dict:
-        """ Exports register definition as dict. """
+        """Exports register definition as dict."""
         return {
             "name": self.name,
             "address": None if self.address is None else f"0x{self.address:X}",
@@ -198,7 +277,7 @@ class Register:
         }
 
     def to_json_def(self, indent: int | None = None) -> str:
-        """ Exports register definition as json text. """
+        """Exports register definition as json text."""
         return json.dumps(self.to_dict_def(), indent=indent)
 
     @staticmethod
@@ -207,12 +286,12 @@ class Register:
             bit_len=data["width"],
             name=data["name"],
             address=None if data["address"] is None else int(data["address"], 16),
-            model=[FieldDef(**f) for f in data["fields"]]
+            model=[FieldDef(**f) for f in data["fields"]],
         )
 
     @staticmethod
     def from_json_def(json_str: str) -> "Register":
-        """ Imports register definition from json text and returns instance of Register. """
+        """Imports register definition from json text and returns instance of Register."""
         return Register.from_dict_def(json.loads(json_str))
 
     def set_field_value(self, field: str, value: float) -> None:
@@ -222,26 +301,28 @@ class Register:
         """
         field_def = self._fields_by_name.get(field)
         if field_def is None:
-            raise ValueError(f"There is no field \"{field}\" in this register.")
+            raise ValueError(f'There is no field "{field}" in this register.')
         if not field_def.rw:
-            raise ValueError(f"Field \"{field}\" is not writable.")
+            raise ValueError(f'Field "{field}" is not writable.')
         min, max = field_def.range()
         if min <= value <= max:
             field_def.write(self.data, value)
         else:
-            raise ValueError(f"Value {value} is out of range [{field_def.range()}] for field \"{field}\"")
+            raise ValueError(
+                f'Value {value} is out of range [{field_def.range()}] for field "{field}"'
+            )
 
     def get_field_value(self, field: str) -> float | int:
         field_def = self._fields_by_name.get(field)
         if field_def is None:
-            raise ValueError(f"There is no field \"{field}\" in this register.")
+            raise ValueError(f'There is no field "{field}" in this register.')
         else:
             return field_def.read(self.data)
 
     def get_field_value_raw(self, field: str) -> BitArray:
         field_def = self._fields_by_name.get(field)
         if field_def is None:
-            raise ValueError(f"There is no field \"{field}\" in this register.")
+            raise ValueError(f'There is no field "{field}" in this register.')
         else:
             return field_def.read_raw(self.data)
 
@@ -254,7 +335,7 @@ class Register:
     def get_field_names(self) -> list[str]:
         return [m.name for m in self._model]
 
-    def link(self, link: RLink, register_address: Optional[int] = None) -> None:
+    def link(self, link: RLink, register_address: int | None = None) -> None:
         """
         Links register to external store. If optional address is provided, then it will be used to access external store
         even if register has address in its definition. If optional address is not provided, then address defined in the
@@ -264,7 +345,9 @@ class Register:
         :param link: link to external store
         :param register_address: address of register in external store
         """
-        self.linked_address = self.address if register_address is None else register_address
+        self.linked_address = (
+            self.address if register_address is None else register_address
+        )
         if self.linked_address is None:
             raise ValueError(
                 "To link register to external store address must be either set in the register "
@@ -280,11 +363,14 @@ class Register:
         data is modified by calling `Register::set_field_value(...)`.
         """
         if self._link is not None:
+            assert self.linked_address is not None
             raw_data = self._link.read(self.linked_address, self.width)
             if raw_data is None:
-                raise RuntimeError(f"There is no register at the address {self.linked_address}.")
+                raise RuntimeError(
+                    f"There is no register at the address {self.linked_address}."
+                )
             self.data = raw_data
-            self.__originial_data = raw_data.copy()
+            self._originial_data = raw_data.copy()
 
     def write(self, read_back: bool = False, if_changed_only: bool = False) -> bool:
         """
@@ -297,14 +383,15 @@ class Register:
                 otherwise do not write (return False). If False (default), then always write.
         :return: True or False if write operation was successful or not.
         """
-        if self._link is None:
-            return False
-        elif if_changed_only and self.__originial_data == self.data:
+        if self._link is None or (
+            if_changed_only and self._originial_data == self.data
+        ):
             return False
         else:
+            assert self.linked_address is not None
             write_success = self._link.write(self.linked_address, self.data)
             if read_back:
                 self.read()
             if write_success:
-                self.__originial_data = self.data.copy()
+                self._originial_data = self.data.copy()
             return write_success

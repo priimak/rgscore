@@ -1,17 +1,16 @@
 import json
-from typing import Optional
 
 import pytest
 from bitstring import BitArray
 
-from rgscore.model.register import Register, FieldDef, RLink
+from rgscore.model.register import FieldDef, Register, RLink
 
 
 class MemLink(RLink):
     def __init__(self):
         self.store = {0x9: BitArray("uint:16=7"), 0xA: BitArray("uint:8=3")}
 
-    def read(self, addr: int, width: int) -> Optional[BitArray]:
+    def read(self, addr: int, width: int) -> BitArray | None:
         raw_register = self.store.get(addr)
         return None if raw_register is None else raw_register.copy()
 
@@ -32,7 +31,9 @@ def test_bare_register_valid():
 
     # implicit field named "val" is created occupying the whole of the register of type U{r.width}.0
     assert r.get_field_names() == ["val"]
-    assert r.get_field_definition("val") == FieldDef(name="val", offset=0, signed="U", width=7, fractional=0, rw=True)
+    assert r.get_field_definition("val") == FieldDef(
+        name="val", offset=0, signed="U", width=7, fractional=0, rw=True
+    )
 
 
 def test_bare_register_invalid():
@@ -63,7 +64,9 @@ def test_register_with_address():
 
 def test_register_with_valid_fields():
     # define register with just one r/o field.
-    r = Register(7, address=0x42, name="AReg", model=[FieldDef.value_of("a@[3:0]U4.1#ro")])
+    r = Register(
+        7, address=0x42, name="AReg", model=[FieldDef.value_of("a@[3:0]U4.1#ro")]
+    )
     assert r.get_field_names() == ["a"]
 
 
@@ -75,24 +78,30 @@ def test_register_with_invalid_fields():
     # fields overlap
     with pytest.raises(ValueError):
         Register(
-            bit_len=7, address=0x42, name="AReg",
-            model=[FieldDef.value_of("a@[6:0]U7.1"), FieldDef.value_of("b@[3:2]S2.0")]
+            bit_len=7,
+            address=0x42,
+            name="AReg",
+            model=[FieldDef.value_of("a@[6:0]U7.1"), FieldDef.value_of("b@[3:2]S2.0")],
         )
 
     # fields names not unique
     with pytest.raises(ValueError):
         Register(
-            bit_len=7, address=0x42, name="AReg",
-            model=[FieldDef.value_of("a@[3:0]U4.1"), FieldDef.value_of("a@[6:4]S3.0")]
+            bit_len=7,
+            address=0x42,
+            name="AReg",
+            model=[FieldDef.value_of("a@[3:0]U4.1"), FieldDef.value_of("a@[6:4]S3.0")],
         )
 
 
 def test_register_access():
     r = Register(
-        bit_len=7, address=0x42, name="AReg",
-        model=[FieldDef.value_of("a@[3:0]U4.1#ro"), FieldDef.value_of("b@[6:4]S3.0")]
+        bit_len=7,
+        address=0x42,
+        name="AReg",
+        model=[FieldDef.value_of("a@[3:0]U4.1#ro"), FieldDef.value_of("b@[6:4]S3.0")],
     )
-    assert r.get_field_names() == ["a", "b"]
+    assert r.get_field_names() == ["b", "a"]
     assert r.get_field_values() == {"a": 0.0, "b": 0.0}
     assert r.get_field_value("a") == 0.0
 
@@ -129,8 +138,10 @@ def test_register_access():
 
     # let us change field "a" to be r/w and check field valid range which is from 0 to +7.5 inclusive
     r = Register(
-        bit_len=7, address=0x42, name="AReg",
-        model=[FieldDef.value_of("a@[3:0]U4.1"), FieldDef.value_of("b@[6:4]S3.0")]
+        bit_len=7,
+        address=0x42,
+        name="AReg",
+        model=[FieldDef.value_of("a@[3:0]U4.1"), FieldDef.value_of("b@[6:4]S3.0")],
     )
 
     r.set_field_value("a", 7.5)
@@ -194,8 +205,10 @@ def test_field_def():
 def test_link():
     store = MemLink()
     r = Register(
-        bit_len=8, address=0xA, name="AReg",
-        model=[FieldDef.value_of("a@[3:0]U4.1"), FieldDef.value_of("b@[6:4]S3.0")]
+        bit_len=8,
+        address=0xA,
+        name="AReg",
+        model=[FieldDef.value_of("a@[3:0]U4.1"), FieldDef.value_of("b@[6:4]S3.0")],
     )
     # register is not linked yet, hence, r.linked_address must be None and write() should fail returning False
     assert r.linked_address is None
@@ -259,8 +272,10 @@ def test_link_at_creation():
 
 def test_json_serialization():
     r1 = Register(
-        bit_len=8, name="Foo", address=0x01,
-        model=[FieldDef.value_of("a@[3:0]U4.1#ro"), FieldDef.value_of("b@[6:4]S3.0")]
+        bit_len=8,
+        name="Foo",
+        address=0x01,
+        model=[FieldDef.value_of("a@[3:0]U4.1#ro"), FieldDef.value_of("b@[6:4]S3.0")],
     )
     r_json = r1.to_json_def()
     data = json.loads(r_json)
@@ -274,5 +289,60 @@ def test_json_serialization():
     assert r2.name == "Foo"
     assert r2.address == 1
     assert r2.width == 8
-    assert r2.get_field_names() == ["a", "b"]
+    assert r2.get_field_names() == [
+        "b",
+        "a",
+    ]  # fields are resorted by decreasing offset
     assert r_json == r2.to_json_def()
+
+
+def test_register_fields_order():
+    # field should be sorted in order of decreasing offsets
+    register = Register(
+        bit_len=8,
+        name="Foo",
+        address=0x01,
+        model=[FieldDef.value_of("a@[3:0]U4.1#ro"), FieldDef.value_of("b@[6:4]S3.0")],
+    )
+    assert register.get_field_names() == ["b", "a"]
+
+
+def test_register_copy():
+    store = MemLink()
+    r = Register(bit_len=8, name="AReg", link=store, address=0xA)
+    r.set_field_value("val", 3)
+    r_copy = r.copy()
+    r.set_field_value("val", 4)
+    assert r_copy.to_json_def() == r.to_json_def()
+    assert r_copy.get_field_value("val") == 3
+    assert r.get_field_value("val") == 4
+
+
+def test_register_change_def():
+    r = Register(bit_len=8, name="AReg", address=0xA)
+    r.set_field_value("val", 3)
+    r.name = "BReg"
+    r.address = 0xB
+    assert r.get_field_value("val") == 3
+
+    # narrowing width should fail since we have an implicit field that U8.0
+    with pytest.raises(ValueError):
+        r.width = 7
+
+    # widening should work though and it should reset all values
+    r.width = 10
+    assert r.get_field_value("val") == 0
+
+    r.replace_model(
+        [FieldDef.value_of("b@[3:0]U4.1#ro"), FieldDef.value_of("a@[6:4]S3.0")]
+    )
+    # notice that order of fields is changed as they are sorted in order of decreasing offsets
+    assert r.get_field_names() == ["a", "b"]
+
+    # setting fields to extend outside of register width should fail
+    with pytest.raises(
+        ValueError, match='Field "b" extends outside of register width.'
+    ):
+        r.replace_model(
+            [FieldDef.value_of("a@[3:0]U4.1#ro"), FieldDef.value_of("b@[16:14]S3.0")]
+        )

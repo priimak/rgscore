@@ -214,6 +214,15 @@ class Register:
         self._originial_data = BitArray(new_width)
         self.data = BitArray(new_width)
 
+    def set_width(self, new_width: int):
+        self.width = new_width
+
+    def set_name(self, new_name: str):
+        self.name = new_name
+
+    def set_address(self, new_address: int):
+        self.address = new_address
+
     def replace_model(self, new_model: list[FieldDef]):
         field_names: set[str] = {fd.name for fd in new_model}
         if len(field_names) != len(new_model):

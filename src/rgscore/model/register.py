@@ -3,7 +3,7 @@ import json
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from functools import cache, reduce
+from functools import reduce
 from typing import Self, final
 
 from bitstring import BitArray
@@ -51,7 +51,7 @@ class RLinkI2C(RLink):
         )
 
 
-@dataclass(frozen=True)
+@dataclass
 class FieldDef:
     name: str
     offset: int
@@ -63,7 +63,6 @@ class FieldDef:
     def copy(self) -> Self:
         return dataclasses.replace(self)
 
-    @cache
     def range(self) -> tuple[float, float]:
         if self.signed == "U":
             return (0.0, (pow(2, self.width) - 1) / pow(2, self.fractional))
@@ -73,11 +72,9 @@ class FieldDef:
                 (pow(2, self.width - 1) - 1) / pow(2, self.fractional),
             )
 
-    @cache
     def end_offset(self) -> int:
         return self.offset + self.width - 1
 
-    @cache
     def idxs(self) -> list[int]:
         l = list(range(self.offset, self.end_offset() + 1))
         return l
@@ -85,7 +82,6 @@ class FieldDef:
     def format(self, value: float) -> str:
         return f"{int(value)}" if self.fractional == 0 else f"{value}"
 
-    @cache
     def __repr__(self):
         rw = "rw" if self.rw else "ro"
         return f"{self.name}@[{self.end_offset()}:{self.offset}]{self.signed}{self.width}.{self.fractional}#{rw}"

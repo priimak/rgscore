@@ -138,6 +138,7 @@ class Register:
     field_def_re = re.compile(
         r"^(?P<name>[a-zA-Z_]+[0-9]*)@\[(?P<end>\d+)(:(?P<start>\d+))?\](?P<s>U|S)(?P<w>\d+)\.(?P<f>\d+)(#(?P<rw>rw|ro))?$"
     )
+    register_name_re = re.compile("^[a-zA-Z]+[a-zA-Z0-9_]+$")
 
     def __init__(
         self,
@@ -157,7 +158,7 @@ class Register:
         :param name: register name (optional)
         :param link: link to the external storage (optional)
         """
-        if name is not None and not re.match("^[a-zA-Z]+[a-zA-Z0-9_]+$", name):
+        if name is not None and not Register.register_name_re.match(name):
             raise ValueError("Invalid register name.")
 
         if bit_len <= 0:

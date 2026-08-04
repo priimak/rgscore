@@ -138,7 +138,7 @@ class Register:
     field_def_re = re.compile(
         r"^(?P<name>[a-zA-Z_]+[0-9]*)@\[(?P<end>\d+)(:(?P<start>\d+))?\](?P<s>U|S)(?P<w>\d+)\.(?P<f>\d+)(#(?P<rw>rw|ro))?$"
     )
-    register_name_re = re.compile("^[a-zA-Z]+[a-zA-Z0-9_]+$")
+    register_name_re = re.compile("^[a-zA-Z]+[a-zA-Z0-9_]*$")
 
     def __init__(
         self,

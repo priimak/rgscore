@@ -43,7 +43,7 @@ class RegList:
 
             if r.address in self._reg_addresses:
                 raise ValueError(
-                    f"Register at this address [{r.address}] is already in the set"
+                    f"Register at this address [0x{r.address:04X}] is already in the set"
                 )
 
             if self._store is not None:

@@ -22,5 +22,5 @@ where = ["src"]
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
-    "i2capi-i2cdriver @ git+https://github.com/priimak/i2capi_i2cdriver.git@v0.2.2"
+    "i2capi-i2cdriver @ git+https://github.com/priimak/i2capi_i2cdriver.git@v0.2.3"
 ]

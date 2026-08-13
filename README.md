@@ -1,3 +1,3 @@
 # RGSCore
 
-Python classes for accessing registers on embedded devices
+Python classes for accessing registers on embedded devices.

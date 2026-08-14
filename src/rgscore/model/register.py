@@ -300,7 +300,7 @@ class Register:
         """Imports register definition from json text and returns instance of Register."""
         return Register.from_dict_def(json.loads(json_str))
 
-    def set_field_value(self, field: str, value: float) -> None:
+    def set_field_value(self, field: str, value: float) -> float | int:
         """
         Sets value to a field or raises exception if unable to do so. If data in the register model in memory actually
         changed as a result of calling this method, then calling `Register::is_changed()` starts returning True.
@@ -313,6 +313,7 @@ class Register:
         min, max = field_def.range()
         if min <= value <= max:
             field_def.write(self.data, value)
+            return field_def.read(self.data)
         else:
             raise ValueError(
                 f'Value {value} is out of range [{field_def.range()}] for field "{field}"'

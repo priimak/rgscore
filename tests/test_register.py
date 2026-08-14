@@ -144,8 +144,12 @@ def test_register_access():
         model=[FieldDef.value_of("a@[3:0]U4.1"), FieldDef.value_of("b@[6:4]S3.0")],
     )
 
-    r.set_field_value("a", 7.5)
+    assert r.set_field_value("a", 7.5) == 7.5
     assert r.get_field_value("a") == 7.5
+
+    # following will truncate to lower bound
+    assert r.set_field_value("a", 6.999) == 6.5
+    assert r.get_field_value("a") == 6.5
 
     r.set_field_value("a", 0)
     assert r.get_field_value("a") == 0.0

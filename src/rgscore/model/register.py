@@ -89,14 +89,38 @@ class FieldDef:
     def read_raw(self, data: BitArray) -> BitArray:
         return data[(data.len - self.end_offset() - 1) : (data.len - self.offset)]
 
-    def read(self, data: BitArray) -> float | int:
+    def next_up_value(self, data: BitArray) -> float | int:
+        return self.__next(data, 1)
+
+    def next_down_value(self, data: BitArray) -> float | int:
+        return self.__next(data, -1)
+
+    def __get_next_raw_field(self, data: BitArray, step: int) -> BitArray:
         raw_field = self.read_raw(data)
+        try:
+            if self.signed == "S":
+                next_in_val = raw_field.int + step
+                return BitArray(f"int:{raw_field.len}={next_in_val}")
+            else:  # unsigned
+                next_in_val = raw_field.uint + step
+                return BitArray(f"uint:{raw_field.len}={next_in_val}")
+        except ValueError:
+            # we are here if next value is out of range for this field
+            return raw_field
+
+    def __next(self, data: BitArray, step: int) -> float | int:
+        return self.__read_from_raw_field(self.__get_next_raw_field(data, step))
+
+    def __read_from_raw_field(self, raw_field: BitArray) -> float | int:
         if self.fractional == 0:
             return raw_field.int if self.signed == "S" else raw_field.uint
         else:
             return (raw_field.int if self.signed == "S" else raw_field.uint) / pow(
                 2, self.fractional
             )
+
+    def read(self, data: BitArray) -> float | int:
+        return self.__read_from_raw_field(self.read_raw(data))
 
     def write(self, data: BitArray, value: float) -> None:
         new_val = int(value * pow(2, self.fractional))
@@ -325,6 +349,20 @@ class Register:
             raise ValueError(f'There is no field "{field}" in this register.')
         else:
             return field_def.read(self.data)
+
+    def get_next_up_field_value(self, field: str) -> float | int:
+        field_def = self._fields_by_name.get(field)
+        if field_def is None:
+            raise ValueError(f'There is no field "{field}" in this register.')
+        else:
+            return field_def.next_up_value(self.data)
+
+    def get_next_down_field_value(self, field: str) -> float | int:
+        field_def = self._fields_by_name.get(field)
+        if field_def is None:
+            raise ValueError(f'There is no field "{field}" in this register.')
+        else:
+            return field_def.next_down_value(self.data)
 
     def get_field_value_raw(self, field: str) -> BitArray:
         field_def = self._fields_by_name.get(field)

@@ -301,6 +301,7 @@ def test_json_serialization():
         bit_len=8,
         name="Foo",
         address=0x01,
+        address_bus_width_bytes=2,
         model=[FieldDef.value_of("a@[3:0]U4.1#ro"), FieldDef.value_of("b@[6:4]S3.0")],
     )
     r_json = r1.to_json_def()
@@ -314,6 +315,7 @@ def test_json_serialization():
     r2 = Register.from_json_def(r_json)
     assert r2.name == "Foo"
     assert r2.address == 1
+    assert r2.address_bus_width_bytes == 2
     assert r2.width == 8
     assert r2.get_field_names() == [
         "b",

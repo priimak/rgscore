@@ -311,6 +311,7 @@ class Register:
         return {
             "name": self.name,
             "address": None if self.address is None else f"0x{self.address:X}",
+            "address_bus_width_bytes": self.address_bus_width_bytes,
             "width": self.width,
             "fields": [dataclasses.asdict(field_def) for field_def in self._model],
         }
@@ -325,6 +326,7 @@ class Register:
             bit_len=data["width"],
             name=data["name"],
             address=None if data["address"] is None else int(data["address"], 16),
+            address_bus_width_bytes=data["address_bus_width_bytes"],
             model=[FieldDef(**f) for f in data["fields"]],
         )
 

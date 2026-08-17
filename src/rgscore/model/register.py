@@ -294,7 +294,7 @@ class Register:
     def __repr__(self):
         retval = "Register" if self.name is None else self.name
         if self.address is not None:
-            retval += f"[0x{self.address:X}]"
+            retval += f"[0x{self.address:0{self.address_bus_width_bytes * 2}X}]"
         return (
             f"{retval}("
             + ", ".join(

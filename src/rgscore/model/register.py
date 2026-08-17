@@ -7,22 +7,24 @@ from functools import reduce
 from typing import Self, final
 
 from bitstring import BitArray
-from i2c_api import I2CMaster
+from i2c_api import I2CMaster, RegisterAddress
 
 
 class RLink(ABC):
     @abstractmethod
-    def read(self, addr: int, width: int) -> BitArray | None:
+    def read(
+        self, addr: int, address_bus_width: int, value_width: int
+    ) -> BitArray | None:
         """
-        Reads raw register value (of `width` bits) from address `addr`.
-        If no register exist at this address, then returns None.
+        Reads raw register value (of `value_width` bits) from address `addr` assuming that
+        address bus is `address_bus_width`. If no register exist at this address, then returns None.
         """
 
     @abstractmethod
-    def write(self, addr: int, value: BitArray) -> bool:
+    def write(self, addr: int, address_bus_width: int, value: BitArray) -> bool:
         """
-        Writes register value `value` to address `addr`. If register does exist at this address the do write and
-        return True, otherwise return False.
+        Writes register value `value` to address `addr` assuming that address bus is `address_bus_width`.
+        If register does exist at this address, then do write and return True, otherwise return False.
         """
 
 
@@ -32,12 +34,15 @@ class RLinkI2C(RLink):
         self.i2c = i2c
         self.device_address = device_address
 
-    def read(self, addr: int, width: int) -> BitArray | None:
+    def read(self, addr: int, address_bus_width: int, width: int) -> BitArray | None:
         bytes_to_read = int(width / 8)
         if (width % 8) > 0:
             bytes_to_read += 1
+
         data = self.i2c.read_register(
-            address=self.device_address, register=addr, num_bytes=bytes_to_read
+            address=self.device_address,
+            register=RegisterAddress(addr, address_bus_width),
+            num_bytes=bytes_to_read,
         )
 
         if data is None:
@@ -45,9 +50,11 @@ class RLinkI2C(RLink):
         else:
             return BitArray(data[0:width])  # TODO: Check. This might be incorrect
 
-    def write(self, addr: int, value: BitArray) -> bool:
+    def write(self, addr: int, address_bus_width: int, value: BitArray) -> bool:
         return self.i2c.write_register(
-            address=self.device_address, register=addr, data=value
+            address=self.device_address,
+            register=RegisterAddress(addr, address_bus_width),
+            data=value,
         )
 
 
@@ -165,6 +172,7 @@ class Register:
         bit_len: int,
         model: list[FieldDef] | None = None,
         address: int | None = None,
+        address_bus_width_bytes: int = 1,
         name: str | None = None,
         link: RLink | None = None,
     ):
@@ -210,6 +218,7 @@ class Register:
             )
 
         self.address = address
+        self.address_bus_width_bytes = address_bus_width_bytes
         self.name = name
         self._link: RLink | None = link
         self.linked_address: int | None = None if link is None else address
@@ -409,7 +418,9 @@ class Register:
         """
         if self._link is not None:
             assert self.linked_address is not None
-            raw_data = self._link.read(self.linked_address, self.width)
+            raw_data = self._link.read(
+                self.linked_address, self.address_bus_width_bytes, self.width
+            )
             if raw_data is None:
                 raise RuntimeError(
                     f"There is no register at the address {self.linked_address}."
@@ -434,7 +445,9 @@ class Register:
             return False
         else:
             assert self.linked_address is not None
-            write_success = self._link.write(self.linked_address, self.data)
+            write_success = self._link.write(
+                self.linked_address, self.address_bus_width_bytes, self.data
+            )
             if read_back:
                 self.read()
             if write_success:

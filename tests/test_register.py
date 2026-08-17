@@ -9,12 +9,20 @@ from rgscore.model.register import FieldDef, Register, RLink
 class MemLink(RLink):
     def __init__(self):
         self.store = {0x9: BitArray("uint:16=7"), 0xA: BitArray("uint:8=3")}
+        self.__last_used_address_bus_width = [0]
 
-    def read(self, addr: int, width: int) -> BitArray | None:
+    def last_used_address_bus_width(self) -> int:
+        return self.__last_used_address_bus_width[0]
+
+    def read(
+        self, addr: int, address_bus_width: int, value_width: int
+    ) -> BitArray | None:
+        self.__last_used_address_bus_width[0] = address_bus_width
         raw_register = self.store.get(addr)
         return None if raw_register is None else raw_register.copy()
 
-    def write(self, addr: int, value: BitArray) -> bool:
+    def write(self, addr: int, address_bus_width: int, value: BitArray) -> bool:
+        self.__last_used_address_bus_width[0] = address_bus_width
         if addr in self.store:
             self.store[addr] = value.copy()
             return True
@@ -217,11 +225,13 @@ def test_link():
     # register is not linked yet, hence, r.linked_address must be None and write() should fail returning False
     assert r.linked_address is None
     assert r.write() == False
+    assert store.last_used_address_bus_width() == 0
 
     assert r.is_changed() == False
     r.link(store)
     assert r.get_field_value("a") == 0.0
     r.read()
+    assert store.last_used_address_bus_width() == 1
     assert r.is_changed() == False
     assert r.get_field_value("a") == 1.5
 
@@ -261,6 +271,18 @@ def test_link():
     r.link(store, 0xB)
     with pytest.raises(RuntimeError):
         r.read()
+
+    # check that bus_width in Register is correctly used in link
+    r = Register(
+        bit_len=8,
+        address=0xA,
+        address_bus_width_bytes=4,
+        name="BReg",
+        model=[FieldDef.value_of("a@[3:0]U4.1"), FieldDef.value_of("b@[6:4]S3.0")],
+        link=store,
+    )
+    r.write()
+    assert store.last_used_address_bus_width() == 4
 
 
 def test_link_at_creation():

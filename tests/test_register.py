@@ -222,8 +222,7 @@ def test_link():
         name="AReg",
         model=[FieldDef.value_of("a@[3:0]U4.1"), FieldDef.value_of("b@[6:4]S3.0")],
     )
-    # register is not linked yet, hence, r.linked_address must be None and write() should fail returning False
-    assert r.linked_address is None
+    # register is not linked yet, hence, r.write() should fail returning False
     assert r.write() == False
     assert store.last_used_address_bus_width() == 0
 
@@ -279,21 +278,10 @@ def test_link():
         address_bus_width_bytes=4,
         name="BReg",
         model=[FieldDef.value_of("a@[3:0]U4.1"), FieldDef.value_of("b@[6:4]S3.0")],
-        link=store,
+        link_provider=lambda: store,
     )
     r.write()
     assert store.last_used_address_bus_width() == 4
-
-
-def test_link_at_creation():
-    store = MemLink()
-
-    # linking at register construction time requires reg. address or ValueError should be raised
-    with pytest.raises(ValueError):
-        Register(bit_len=8, name="AReg", link=store)
-
-    r = Register(bit_len=8, name="AReg", link=store, address=0xA)
-    assert r.linked_address == 0xA
 
 
 def test_json_serialization():
@@ -337,7 +325,7 @@ def test_register_fields_order():
 
 def test_register_copy():
     store = MemLink()
-    r = Register(bit_len=8, name="AReg", link=store, address=0xA)
+    r = Register(bit_len=8, name="AReg", link_provider=lambda: store, address=0xA)
     r.set_field_value("val", 3)
     r_copy = r.copy()
     r.set_field_value("val", 4)
@@ -374,3 +362,26 @@ def test_register_change_def():
         r.replace_model(
             [FieldDef.value_of("a@[3:0]U4.1#ro"), FieldDef.value_of("b@[16:14]S3.0")]
         )
+
+
+def test_embedding_class():
+    store = MemLink()
+    r = Register(
+        bit_len=8,
+        name="AReg",
+        address=0xA,
+        model=[FieldDef.value_of("a@[3:0]U4.1#rw"), FieldDef.value_of("b@[6:4]S3.0")],
+    )
+    c = r.mk_embedding_class(lambda: store, auto_sync=False)
+    rr = c()
+    assert rr.a == 0
+    rr.__read()
+    assert rr.a == 1.5
+    rr.a = 0
+    assert rr.a == 0
+    rr.__read()
+    assert rr.a == 1.5
+    rr.a = 0
+    rr.__write()
+    rr.__read()
+    assert rr.a == 0

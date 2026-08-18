@@ -2,9 +2,10 @@ import dataclasses
 import json
 import re
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import reduce
-from typing import Self, final
+from typing import Any, Self, final
 
 from bitstring import BitArray
 from i2c_api import I2CMaster, RegisterAddress
@@ -174,7 +175,7 @@ class Register:
         address: int | None = None,
         address_bus_width_bytes: int = 1,
         name: str | None = None,
-        link: RLink | None = None,
+        link_provider: Callable[[], RLink] | None = None,
     ):
         """
         Register in an object that encapsulates array of bits and field definitions and provides read and write
@@ -184,7 +185,7 @@ class Register:
         :param model: model of register fields
         :param address: register address (optional)
         :param name: register name (optional)
-        :param link: link to the external storage (optional)
+        :param link_provider: provider of link to the external storage (optional)
         """
         if name is not None and not Register.register_name_re.match(name):
             raise ValueError("Invalid register name.")
@@ -212,16 +213,11 @@ class Register:
         self.__validate_model_wrt_width(self._model, self.width)
         self.__validate_fields_overlapp(self._model)
 
-        if address is None and link is not None:
-            raise ValueError(
-                "Register address must be defined to link it to the external store."
-            )
-
         self.address = address
         self.address_bus_width_bytes = address_bus_width_bytes
         self.name = name
-        self._link: RLink | None = link
-        self.linked_address: int | None = None if link is None else address
+        self.__link_provider: Callable[[], RLink] | None = link_provider
+        self.linked_address: int | None = address
 
     def __validate_model_wrt_width(self, model: list[FieldDef], width: int):
         for m in model:
@@ -269,7 +265,7 @@ class Register:
             model=[fd.copy() for fd in self._model],
             address=self.address,
             name=self.name,
-            link=self._link,
+            link_provider=self.__link_provider,
         )
         register_copy.data = self.data.copy()
         register_copy._originial_data = self._originial_data.copy()
@@ -401,15 +397,17 @@ class Register:
         :param link: link to external store
         :param register_address: address of register in external store
         """
-        self.linked_address = (
-            self.address if register_address is None else register_address
-        )
+        if register_address is not None:
+            self.linked_address = register_address
         if self.linked_address is None:
             raise ValueError(
                 "To link register to external store address must be either set in the register "
                 "or provided during linking."
             )
-        self._link = link
+        self.__link_provider = lambda: link
+
+    def set_link_provider(self, link_provider: Callable[[], RLink]) -> None:
+        self.__link_provider = link_provider
 
     def read(self) -> None:
         """
@@ -418,9 +416,9 @@ class Register:
         Once data is read from the external store, calling `Register::is_changed()` starts returning False until
         data is modified by calling `Register::set_field_value(...)`.
         """
-        if self._link is not None:
+        if self.__link_provider is not None:
             assert self.linked_address is not None
-            raw_data = self._link.read(
+            raw_data = self.__link_provider().read(
                 self.linked_address, self.address_bus_width_bytes, self.width
             )
             if raw_data is None:
@@ -441,13 +439,13 @@ class Register:
                 otherwise do not write (return False). If False (default), then always write.
         :return: True or False if write operation was successful or not.
         """
-        if self._link is None or (
+        if self.__link_provider is None or (
             if_changed_only and self._originial_data == self.data
         ):
             return False
         else:
             assert self.linked_address is not None
-            write_success = self._link.write(
+            write_success = self.__link_provider().write(
                 self.linked_address, self.address_bus_width_bytes, self.data
             )
             if read_back:
@@ -455,3 +453,34 @@ class Register:
             if write_success:
                 self._originial_data = self.data.copy()
             return write_success
+
+    def mk_embedding_class(
+        self, link_provider: Callable[[], RLink], auto_sync: bool
+    ) -> Any:
+        register = self.copy()
+        register.set_link_provider(link_provider)
+
+        attrs = {
+            "__read": register.read,
+            "__write": register.write,
+        }
+        for field_name in self.get_field_names():
+
+            def mk_accessor(fname, register, auto_sync):
+                def field_accessor(sself, new_value=None) -> int | float:
+                    if new_value is None:
+                        if auto_sync:
+                            register.read()
+                        return register.get_field_value(fname)
+                    else:
+                        retval = register.set_field_value(fname, new_value)
+                        if auto_sync:
+                            register.write()
+                        return retval
+
+                return field_accessor
+
+            accessor = mk_accessor(field_name, register, auto_sync)
+            attrs[field_name] = property(fget=accessor, fset=accessor)
+
+        return type(self.name, (), attrs)

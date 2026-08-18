@@ -463,6 +463,7 @@ class Register:
         attrs = {
             "_read": register.read,
             "_write": register.write,
+            "__repr__": register.__repr__,
         }
         for field_name in self.get_field_names():
 

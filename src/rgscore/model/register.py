@@ -461,8 +461,8 @@ class Register:
         register.set_link_provider(link_provider)
 
         attrs = {
-            "__read": register.read,
-            "__write": register.write,
+            "_read": register.read,
+            "_write": register.write,
         }
         for field_name in self.get_field_names():
 

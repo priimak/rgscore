@@ -375,13 +375,13 @@ def test_embedding_class():
     c = r.mk_embedding_class(lambda: store, auto_sync=False)
     rr = c()
     assert rr.a == 0
-    rr.__read()
+    rr._read()
     assert rr.a == 1.5
     rr.a = 0
     assert rr.a == 0
-    rr.__read()
+    rr._read()
     assert rr.a == 1.5
     rr.a = 0
-    rr.__write()
-    rr.__read()
+    rr._write()
+    rr._read()
     assert rr.a == 0

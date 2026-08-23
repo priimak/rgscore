@@ -481,7 +481,18 @@ class Register:
 
                 return field_accessor
 
+            def mk_raw_accessor(fname, register):
+                def field_accessor(sself) -> BitArray:
+                    if auto_sync:
+                        register.read()
+                    return register.get_field_value_raw(fname)
+
+                return field_accessor
+
             accessor = mk_accessor(field_name, register, auto_sync)
             attrs[field_name] = property(fget=accessor, fset=accessor)
+            attrs[field_name + "_raw"] = property(
+                fget=mk_raw_accessor(field_name, register)
+            )
 
         return type(self.name, (), attrs)

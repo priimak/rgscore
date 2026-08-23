@@ -375,12 +375,15 @@ def test_embedding_class():
     c = r.mk_embedding_class(lambda: store, auto_sync=False)
     rr = c()
     assert rr.a == 0
+    assert rr.a_raw == BitArray("0b0000")
     rr._read()
     assert rr.a == 1.5
     rr.a = 0
     assert rr.a == 0
     rr._read()
     assert rr.a == 1.5
+    assert rr.a_raw == BitArray("0b0011")
+
     rr.a = 0
     rr._write()
     rr._read()

@@ -1,2 +1,0 @@
-class MetaVar:
-    pass

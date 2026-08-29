@@ -73,16 +73,16 @@ wheels = [
 
 [[package]]
 name = "i2c-api"
-version = "0.8.2.post0+git.bca8f55b.dirty"
-source = { git = "https://github.com/priimak/i2c_api.git?rev=v0.8.2#bca8f55b52ad7831566dde82179f800590265a20" }
+version = "0.9.0.post0+git.f50ab2bc.dirty"
+source = { git = "https://github.com/priimak/i2c_api.git?rev=v0.9.0#f50ab2bc662beed6352807b12bea1016e004a519" }
 dependencies = [
     { name = "bitstring" },
 ]
 
 [[package]]
 name = "i2capi-i2cdriver"
-version = "0.4.1.post0+git.d797733a.dirty"
-source = { git = "https://github.com/priimak/i2capi_i2cdriver.git?rev=v0.4.1#d797733af210193256990fc3d710c3a6a81178bd" }
+version = "0.5.0.post0+git.cbc7052e.dirty"
+source = { git = "https://github.com/priimak/i2capi_i2cdriver.git?rev=v0.5.0#cbc7052e412f8a8727f8148742c9dfb1404cdcd5" }
 dependencies = [
     { name = "i2c-api" },
     { name = "i2cdriver" },
@@ -178,12 +178,12 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "bitstring", specifier = ">=4.4.0" },
-    { name = "i2c-api", git = "https://github.com/priimak/i2c_api.git?rev=v0.8.2" },
+    { name = "i2c-api", git = "https://github.com/priimak/i2c_api.git?rev=v0.9.0" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "i2capi-i2cdriver", git = "https://github.com/priimak/i2capi_i2cdriver.git?rev=v0.4.1" },
+    { name = "i2capi-i2cdriver", git = "https://github.com/priimak/i2capi_i2cdriver.git?rev=v0.5.0" },
     { name = "pytest", specifier = ">=9.1.1" },
 ]
 

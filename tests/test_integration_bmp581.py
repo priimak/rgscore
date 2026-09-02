@@ -1,11 +1,11 @@
 import time
 
 import pytest
-from i2c_api import RegisterAddress
+from i2c_api import I2CTransaction, RegisterAddress
 from i2capi_i2cdriver.i2cdriver_api import I2CMasterI2CDriver
 from i2cdriver import I2CDriver
 
-from rgscore import FieldDef, Register, RegList, RLink, RLinkI2C
+from rgscore import FieldDef, Register, RegList, RLink, RLinkI2C, S, U
 
 i2c_master = I2CMasterI2CDriver(I2CDriver())
 
@@ -85,3 +85,22 @@ class TestBMP581:
         assert (
             odr_register.get_field_value("odr") == 0x1C
         )  # 1Hz frequency for measurements
+
+    def test_sequential_read_using_i2c_language(self, bmp581_address):
+        i2c = I2CTransaction()
+        tr = (
+            i2c.start()
+            .address(bmp581_address)
+            .write(1)
+            .restart()
+            .address(bmp581_address)
+            .read(2)
+            .stop()
+        )
+        data, success = i2c_master.exec(tr)
+        assert success == True
+        assert data[0] == [80, 50]
+
+        # confirm that we can use U and S with arrays of integers
+        assert U(2, data[0]) == 5132.5
+        assert S(2, data[0]) == 5132.5

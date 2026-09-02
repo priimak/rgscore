@@ -87,8 +87,8 @@ class TestBMP581:
         )  # 1Hz frequency for measurements
 
     def test_sequential_read_using_i2c_language(self, bmp581_address):
-        i2c = I2CTransaction()
-        tr = (
+        i2c = I2CTransaction(i2c_master)
+        data, success = (
             i2c.start()
             .address(bmp581_address)
             .write(1)
@@ -96,8 +96,8 @@ class TestBMP581:
             .address(bmp581_address)
             .read(2)
             .stop()
+            .exec()
         )
-        data, success = i2c_master.exec(tr)
         assert success == True
         assert data[0] == [80, 50]
 

@@ -33,18 +33,12 @@ rs.add(
         ],
     )
 )
-rs.add(
-    Register(
-        bit_len=8, address=0x7E, name="CMD", model=[FieldDef.value_of("cmd@[7:0]U8.0")]
-    )
-)
+rs.add(Register(bit_len=8, address=0x7E, name="CMD", model=[FieldDef.value_of("cmd@[7:0]U8.0")]))
 
 
 class TestBMP581:
     def test_read_id_registers(self, bmp581_address: int):
-        asic_id_regval = i2c_master.read_register(
-            bmp581_address, RegisterAddress(0x01, 1)
-        )
+        asic_id_regval = i2c_master.read_register(bmp581_address, RegisterAddress(0x01, 1))
         assert asic_id_regval.bin == "01010000"
 
     def test_odr_register(self, link: RLink):
@@ -53,28 +47,20 @@ class TestBMP581:
 
         # this register should come up with all values reset to default values which are as follows:
         assert odr_register.get_field_value("deep_dis") == 0
-        assert (
-            odr_register.get_field_value("odr") == 0x1C
-        )  # 1Hz frequency for measurements
+        assert odr_register.get_field_value("odr") == 0x1C  # 1Hz frequency for measurements
         assert odr_register.get_field_value("pwr_mode") == 0
 
         # change frequency for measurements to 0x1F (measure every 1/4 of a second)
         odr_register.set_field_value("odr", 0x1F)
-        assert (
-            odr_register.get_field_value("odr") == 0x1F
-        )  # 0.125Hz frequency for measurements
+        assert odr_register.get_field_value("odr") == 0x1F  # 0.125Hz frequency for measurements
         # but data is not written out to the device; we will read it now to confirm that it is so
         odr_register.read()
-        assert (
-            odr_register.get_field_value("odr") == 0x1C
-        )  # 1Hz frequency for measurements
+        assert odr_register.get_field_value("odr") == 0x1C  # 1Hz frequency for measurements
         # change it again and now write it to the device
         odr_register.set_field_value("odr", 0x1F)
         odr_register.write()
         odr_register.read()
-        assert (
-            odr_register.get_field_value("odr") == 0x1F
-        )  # 0.125Hz frequency for measurements
+        assert odr_register.get_field_value("odr") == 0x1F  # 0.125Hz frequency for measurements
 
         # now issue reset and read back odr_register and confirm that odr value is back to default value
         rs.get_register_by_name("CMD").set_field_value("cmd", 0xB6)
@@ -82,25 +68,14 @@ class TestBMP581:
         # according to the spec device should be unresponsive for 2ms. So to proceed we will wait 5 millis.
         time.sleep(0.005)
         odr_register.read()
-        assert (
-            odr_register.get_field_value("odr") == 0x1C
-        )  # 1Hz frequency for measurements
+        assert odr_register.get_field_value("odr") == 0x1C  # 1Hz frequency for measurements
 
     def test_sequential_read_using_i2c_language(self, bmp581_address):
         i2c = I2CTransaction(i2c_master)
-        data, success = (
-            i2c.start()
-            .address(bmp581_address)
-            .write(1)
-            .restart()
-            .address(bmp581_address)
-            .read(2)
-            .stop()
-            .exec()
-        )
-        assert success == True
-        assert data[0] == [80, 50]
+        result = i2c.start().address(bmp581_address).write(1).restart().address(bmp581_address).read(2).stop().exec()
+        assert result.is_success == True
+        assert result.data[0] == [80, 50]
 
         # confirm that we can use U and S with arrays of integers
-        assert U(2, data[0]) == 5132.5
-        assert S(2, data[0]) == 5132.5
+        assert U(2, result.data[0]) == 5132.5
+        assert S(2, result.data[0]) == 5132.5

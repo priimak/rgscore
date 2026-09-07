@@ -13,9 +13,7 @@ def __to_bit_array(data: int | Bits) -> Bits:
 
 
 def U(en: int, bit_arrays: list[Bits | int]) -> float | int:
-    return reduce(
-        lambda acc, v: acc + v, [__to_bit_array(a) for a in bit_arrays], BitArray(0)
-    ).uint / __2pow(en)
+    return reduce(lambda acc, v: acc + v, [__to_bit_array(a) for a in bit_arrays], BitArray(0)).uint / __2pow(en)
 
 
 def S(en: int, bit_arrays: list[Bits | int]) -> float | int:

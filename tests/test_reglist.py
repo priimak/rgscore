@@ -117,6 +117,7 @@ def test_update_register():
 
     assert [r.name for r in rgsl.registers] == ["Foo", "Moo", "XYZ"]
     register_moo_original = rgsl.get_register_by_name("Moo")
+    assert register_moo_original is not None
     register_moo_copy = register_moo_original.copy()
     register_moo_copy.name = "MooA"
     register_moo_copy.address = 0x0A
@@ -132,9 +133,7 @@ def test_update_register():
     register_foo_original = rgsl.get_register_by_name("Foo")
     assert register_foo_original is not None
     register_foo_copy = register_foo_original.copy()
-    register_foo_copy.replace_model(
-        [FieldDef.value_of("z@[3:0]U4.1#ro"), FieldDef.value_of("x@[7:4]U4.1#rw")]
-    )
+    register_foo_copy.replace_model([FieldDef.value_of("z@[3:0]U4.1#ro"), FieldDef.value_of("x@[7:4]U4.1#rw")])
 
     rgsl.update_register_def(register_foo_original, register_foo_copy)
     # now there should be one more change

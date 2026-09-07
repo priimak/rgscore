@@ -37,14 +37,10 @@ class RegList:
                 r.name = f"R{r.address}"
 
             if r.name in self._reg_names:
-                raise ValueError(
-                    f"Register under a name [{r.name}] is already in the set"
-                )
+                raise ValueError(f"Register under a name [{r.name}] is already in the set")
 
             if r.address in self._reg_addresses:
-                raise ValueError(
-                    f"Register at this address [0x{r.address:04X}] is already in the set"
-                )
+                raise ValueError(f"Register at this address [0x{r.address:04X}] is already in the set")
 
             if self._store is not None:
                 r.link(self._store)
@@ -86,9 +82,7 @@ class RegList:
             if call_on_change_callback:
                 self._on_change_callback(self)
 
-    def update_register_def(
-        self, original_register: Register, new_register: Register
-    ) -> None:
+    def update_register_def(self, original_register: Register, new_register: Register) -> None:
         """
         Updates register in the regList given the original one and a new one which is expected to replace original.
         """
@@ -98,26 +92,14 @@ class RegList:
         if new_register.name is None:
             raise ValueError("To be added Register must have a name")
 
-        if (
-            new_register.name != original_register.name
-            and new_register.name in self._reg_names
-        ):
-            raise ValueError(
-                f"Register under a name [{new_register.name}] is already in the set"
-            )
+        if new_register.name != original_register.name and new_register.name in self._reg_names:
+            raise ValueError(f"Register under a name [{new_register.name}] is already in the set")
 
-        if (
-            new_register.address != original_register.address
-            and new_register.address in self._reg_addresses
-        ):
-            raise ValueError(
-                f"Register at this address [{new_register.address}] is already in the set"
-            )
+        if new_register.address != original_register.address and new_register.address in self._reg_addresses:
+            raise ValueError(f"Register at this address [{new_register.address}] is already in the set")
 
         assert original_register.name is not None
-        self.__delete_register_by_name(
-            original_register.name, call_on_change_callback=False
-        )
+        self.__delete_register_by_name(original_register.name, call_on_change_callback=False)
         self.__add(new_register, call_on_change_callback=False)
         self._on_change_callback(self)
 
@@ -161,9 +143,7 @@ class RegList:
         if data["class"] != "RegList":
             raise ValueError("Provided json document does not represent regList")
         elif data["version"] != 1:
-            raise ValueError(
-                f"Provided regList json has unsupported version {data['version']}"
-            )
+            raise ValueError(f"Provided regList json has unsupported version {data['version']}")
         else:
             self.clear()
             self.add([Register.from_dict_def(d) for d in data["registers"]])

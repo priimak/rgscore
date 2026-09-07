@@ -14,9 +14,7 @@ class MemLink(RLink):
     def last_used_address_bus_width(self) -> int:
         return self.__last_used_address_bus_width[0]
 
-    def read(
-        self, addr: int, address_bus_width: int, value_width: int
-    ) -> BitArray | None:
+    def read(self, addr: int, address_bus_width: int, value_width: int) -> BitArray | None:
         self.__last_used_address_bus_width[0] = address_bus_width
         raw_register = self.store.get(addr)
         return None if raw_register is None else raw_register.copy()
@@ -39,9 +37,7 @@ def test_bare_register_valid():
 
     # implicit field named "val" is created occupying the whole of the register of type U{r.width}.0
     assert r.get_field_names() == ["val"]
-    assert r.get_field_definition("val") == FieldDef(
-        name="val", offset=0, signed="U", width=7, fractional=0, rw=True
-    )
+    assert r.get_field_definition("val") == FieldDef(name="val", offset=0, signed="U", width=7, fractional=0, rw=True)
 
 
 def test_bare_register_invalid():
@@ -72,9 +68,7 @@ def test_register_with_address():
 
 def test_register_with_valid_fields():
     # define register with just one r/o field.
-    r = Register(
-        7, address=0x42, name="AReg", model=[FieldDef.value_of("a@[3:0]U4.1#ro")]
-    )
+    r = Register(7, address=0x42, name="AReg", model=[FieldDef.value_of("a@[3:0]U4.1#ro")])
     assert r.get_field_names() == ["a"]
 
 
@@ -349,19 +343,13 @@ def test_register_change_def():
     r.width = 10
     assert r.get_field_value("val") == 0
 
-    r.replace_model(
-        [FieldDef.value_of("b@[3:0]U4.1#ro"), FieldDef.value_of("a@[6:4]S3.0")]
-    )
+    r.replace_model([FieldDef.value_of("b@[3:0]U4.1#ro"), FieldDef.value_of("a@[6:4]S3.0")])
     # notice that order of fields is changed as they are sorted in order of decreasing offsets
     assert r.get_field_names() == ["a", "b"]
 
     # setting fields to extend outside of register width should fail
-    with pytest.raises(
-        ValueError, match='Field "b" extends outside of register width.'
-    ):
-        r.replace_model(
-            [FieldDef.value_of("a@[3:0]U4.1#ro"), FieldDef.value_of("b@[16:14]S3.0")]
-        )
+    with pytest.raises(ValueError, match='Field "b" extends outside of register width.'):
+        r.replace_model([FieldDef.value_of("a@[3:0]U4.1#ro"), FieldDef.value_of("b@[16:14]S3.0")])
 
 
 def test_embedding_class():
@@ -370,10 +358,14 @@ def test_embedding_class():
         bit_len=8,
         name="AReg",
         address=0xA,
-        model=[FieldDef.value_of("a@[3:0]U4.1#rw"), FieldDef.value_of("b@[6:4]S3.0")],
+        model=[FieldDef.value_of("a@[3:0]U4.1#rw"), FieldDef.value_of("b_raw@[6:4]S3.0")],
     )
     c = r.mk_embedding_class(lambda: store, auto_sync=False)
     rr = c()
+
+    # embedding register class is callable, and it is returns underlining bitarray
+    assert rr() == BitArray("0b00000000")
+
     assert rr.a == 0
     assert rr.a_raw == BitArray("0b0000")
     rr._read()
@@ -388,3 +380,7 @@ def test_embedding_class():
     rr._write()
     rr._read()
     assert rr.a == 0
+
+    # check disambiguation of b_raw and b_raw_raw
+    assert rr.b_raw == 0
+    assert rr.b_raw_raw == BitArray("0b000")

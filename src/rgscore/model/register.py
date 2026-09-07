@@ -13,9 +13,7 @@ from i2c_api import I2CMaster, RegisterAddress
 
 class RLink(ABC):
     @abstractmethod
-    def read(
-        self, addr: int, address_bus_width: int, value_width: int
-    ) -> BitArray | None:
+    def read(self, addr: int, address_bus_width: int, value_width: int) -> BitArray | None:
         """
         Reads raw register value (of `value_width` bits) from address `addr` assuming that
         address bus is `address_bus_width`. If no register exist at this address, then returns None.
@@ -123,9 +121,7 @@ class FieldDef:
         if self.fractional == 0:
             return raw_field.int if self.signed == "S" else raw_field.uint
         else:
-            return (raw_field.int if self.signed == "S" else raw_field.uint) / pow(
-                2, self.fractional
-            )
+            return (raw_field.int if self.signed == "S" else raw_field.uint) / pow(2, self.fractional)
 
     def read(self, data: BitArray) -> float | int:
         return self.__read_from_raw_field(self.read_raw(data))
@@ -197,9 +193,7 @@ class Register:
         self.__width = bit_len
 
         self._model = (
-            [FieldDef.value_of(f"val@[{bit_len - 1}:0]U{bit_len}.0")]
-            if model is None
-            else [m.copy() for m in model]
+            [FieldDef.value_of(f"val@[{bit_len - 1}:0]U{bit_len}.0")] if model is None else [m.copy() for m in model]
         )
         self._model.sort(key=lambda fd: -fd.offset)
 
@@ -294,10 +288,7 @@ class Register:
         return (
             f"{retval}("
             + ", ".join(
-                [
-                    f"{field_def.name}={field_def.format(field_def.read(self.data))}"
-                    for field_def in self._model
-                ]
+                [f"{field_def.name}={field_def.format(field_def.read(self.data))}" for field_def in self._model]
             )
             + ")"
         )
@@ -346,9 +337,7 @@ class Register:
             field_def.write(self.data, value)
             return field_def.read(self.data)
         else:
-            raise ValueError(
-                f'Value {value} is out of range [{field_def.range()}] for field "{field}"'
-            )
+            raise ValueError(f'Value {value} is out of range [{field_def.range()}] for field "{field}"')
 
     def get_field_value(self, field: str) -> float | int:
         field_def = self._fields_by_name.get(field)
@@ -418,13 +407,9 @@ class Register:
         """
         if self.__link_provider is not None:
             assert self.linked_address is not None
-            raw_data = self.__link_provider().read(
-                self.linked_address, self.address_bus_width_bytes, self.width
-            )
+            raw_data = self.__link_provider().read(self.linked_address, self.address_bus_width_bytes, self.width)
             if raw_data is None:
-                raise RuntimeError(
-                    f"There is no register at the address {self.linked_address}."
-                )
+                raise RuntimeError(f"There is no register at the address {self.linked_address}.")
             self.data = raw_data
             self._originial_data = raw_data.copy()
 
@@ -439,24 +424,18 @@ class Register:
                 otherwise do not write (return False). If False (default), then always write.
         :return: True or False if write operation was successful or not.
         """
-        if self.__link_provider is None or (
-            if_changed_only and self._originial_data == self.data
-        ):
+        if self.__link_provider is None or (if_changed_only and self._originial_data == self.data):
             return False
         else:
             assert self.linked_address is not None
-            write_success = self.__link_provider().write(
-                self.linked_address, self.address_bus_width_bytes, self.data
-            )
+            write_success = self.__link_provider().write(self.linked_address, self.address_bus_width_bytes, self.data)
             if read_back:
                 self.read()
             if write_success:
                 self._originial_data = self.data.copy()
             return write_success
 
-    def mk_embedding_class(
-        self, link_provider: Callable[[], RLink], auto_sync: bool
-    ) -> Any:
+    def mk_embedding_class(self, link_provider: Callable[[], RLink], auto_sync: bool) -> Any:
         register = self.copy()
         register.set_link_provider(link_provider)
 
@@ -464,6 +443,7 @@ class Register:
             "_read": register.read,
             "_write": register.write,
             "__repr__": register.__repr__,
+            "__call__": lambda _: register.data,
         }
         for field_name in self.get_field_names():
 
@@ -491,8 +471,6 @@ class Register:
 
             accessor = mk_accessor(field_name, register, auto_sync)
             attrs[field_name] = property(fget=accessor, fset=accessor)
-            attrs[field_name + "_raw"] = property(
-                fget=mk_raw_accessor(field_name, register)
-            )
+            attrs[field_name + "_raw"] = property(fget=mk_raw_accessor(field_name, register))
 
         return type(self.name, (), attrs)
